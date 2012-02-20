@@ -1,0 +1,14 @@
+.dep/
+phantom.c.orig
+phantom.c.rej
+phantom.eep
+phantom.elf
+phantom.hex
+phantom.lss
+phantom.lst
+phantom.map
+phantom.o
+phantom.sym
+usb_keyboard.lst
+usb_keyboard.o
+

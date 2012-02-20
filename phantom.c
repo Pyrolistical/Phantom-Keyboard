@@ -33,11 +33,32 @@
 #define NULL            0
 #define NA              0
 
+#define _DDRB           (uint8_t *const)&DDRB
+#define _DDRC           (uint8_t *const)&DDRC
+#define _DDRD           (uint8_t *const)&DDRD
+#define _DDRE           (uint8_t *const)&DDRE
+#define _DDRF           (uint8_t *const)&DDRF
+
 #define _PINB           (uint8_t *const)&PINB
+#define _PINC           (uint8_t *const)&PINC
+#define _PIND           (uint8_t *const)&PIND
+#define _PINE           (uint8_t *const)&PINE
+#define _PINF           (uint8_t *const)&PINF
+
+#define _PORTB          (uint8_t *const)&PORTB
 #define _PORTC          (uint8_t *const)&PORTC
 #define _PORTD          (uint8_t *const)&PORTD
 #define _PORTE          (uint8_t *const)&PORTE
 #define _PORTF          (uint8_t *const)&PORTF
+
+#define _PIN0 0x01
+#define _PIN1 0x02
+#define _PIN2 0x04
+#define _PIN3 0x08
+#define _PIN4 0x10
+#define _PIN5 0x20
+#define _PIN6 0x40
+#define _PIN7 0x80
 
 /* NROW number of rows
    NCOL number of columns
@@ -91,21 +112,26 @@ const uint8_t layout[NKEY] = {
 };
 
 /* Specifies the ports and pin numbers for the rows */
+uint8_t *const  row_ddr[NROW] = { _DDRB,  _DDRB,  _DDRB,  _DDRB,  _DDRB,  _DDRB};
+uint8_t *const row_pull[NROW] = {_PORTB, _PORTB, _PORTB, _PORTB, _PORTB, _PORTB};
 uint8_t *const row_port[NROW] = { _PINB,  _PINB,  _PINB,  _PINB,  _PINB,  _PINB};
-const uint8_t   row_bit[NROW] = {  0x01,   0x02,   0x04,   0x08,   0x10,   0x20};
+const uint8_t   row_bit[NROW] = { _PIN0,  _PIN1,  _PIN2,  _PIN3,  _PIN4,  _PIN5};
 
 /* Specifies the ports and pin numbers for the columns */
+uint8_t *const  col_ddr[NCOL] = { _DDRD,  _DDRC,  _DDRC,  _DDRD,  _DDRD,  _DDRE,
+				  _DDRF,  _DDRF,  _DDRF,  _DDRF,  _DDRF,  _DDRF,
+				  _DDRD,  _DDRD,  _DDRD,  _DDRD,  _DDRD};
 uint8_t *const col_port[NCOL] = {_PORTD, _PORTC, _PORTC, _PORTD, _PORTD, _PORTE,
 				 _PORTF, _PORTF, _PORTF, _PORTF, _PORTF, _PORTF,
 				 _PORTD, _PORTD, _PORTD, _PORTD, _PORTD};
-const uint8_t   col_bit[NCOL] = {  0x20,   0x80,   0x40,   0x10,   0x01,   0x40,
-				   0x01,   0x02,   0x10,   0x20,   0x40,   0x80,
-				   0x80,   0x40,   0x02,   0x04,   0x08};
+const uint8_t   col_bit[NCOL] = { _PIN1,  _PIN7,  _PIN6,  _PIN4,  _PIN0,  _PIN6,
+				  _PIN0,  _PIN1,  _PIN4,  _PIN1,  _PIN6,  _PIN7,
+				  _PIN7,  _PIN6,  _PIN1,  _PIN2,  _PIN3};
 
 /* pressed  keeps track of which keys that are pressed
    queue    contains the keys that are sent in the HID packet
    mod_keys is the bit pattern corresponding to pressed modifier keys */
-bool pressed[102];
+bool pressed[NKEY];
 uint8_t queue[7] = {255,255,255,255,255,255,255};
 uint8_t mod_keys = 0;
 
@@ -115,11 +141,9 @@ void key_press(uint8_t key_id);
 void key_release(uint8_t key_id);
 
 int main(void) {
-  uint8_t row, col, key_id, i;
+  uint8_t row, col, key_id;
 
   init();
-  for(i=0; i<NCOL; i++)
-    *col_port[col] |= col_bit[i];
 
   for(;;) {
     _delay_ms(5);                                //  Debouncing
@@ -140,8 +164,9 @@ int main(void) {
 
     //    OCR1B++; OCR1C++;
 
-    PORTB = (PORTB & 0b00111111) | ((keyboard_leds << 5) & 0b11000000);
-    DDRB  = (DDRB  & 0b00111111) | ((keyboard_leds << 5) & 0b11000000);
+    // TODO fixed keyboard leds.  I disabled as I cannot test them
+    //PORTB = (PORTB & 0b00111111) | ((keyboard_leds << 5) & 0b11000000);
+    //DDRB  = (DDRB  & 0b00111111) | ((keyboard_leds << 5) & 0b11000000);
 
   }
 }
@@ -185,20 +210,27 @@ void init(void) {
   usb_init();
   while(!usb_configured());
   _delay_ms(1000);
-  // PORTB is set as input with pull-up resistors
-  // PORTC,D,E,F are set to high output
-  DDRB  = 0xC0; DDRC  = 0xFF; DDRD  = 0xFF; DDRE  = 0xFF; DDRF  = 0xFF;
-  PORTB = 0x3F; PORTC = 0xFF; PORTD = 0xFF; PORTE = 0xFF; PORTF = 0xFF;
+  // init rows for input
+  for(uint8_t row=0; row<NROW; row++) {
+    *row_ddr[row] &= ~row_bit[row];
+    *row_pull[row] |= row_bit[row];
+  }
+  // init cols for output
+  for(uint8_t col=0; col<NCOL; col++) {
+    *col_ddr[col] |= col_bit[col];
+    *col_port[col] |= col_bit[col];
+  }
   for(i=0; i<NKEY; i++) pressed[i] = false;
 
+  // TODO fixed keyboard leds.  I disabled as I cannot test them
   // LEDs are on output compare pins OC1B OC1C
   // This activates fast PWM mode on them.
   // OCR1B sets the intensity
-  TCCR1A = 0b00101001;
-  TCCR1B = 0b00001001;
-  OCR1B = OCR1C = 32;
+  //TCCR1A = 0b00101001;
+  //TCCR1B = 0b00001001;
+  //OCR1B = OCR1C = 32;
 
   // LEDs: LED_A -> PORTB6, LED_B -> PORTB7
-  DDRB  &= 0b00000000;
-  PORTB &= 0b00111111;
+  //DDRB  &= 0b00000000;
+  //PORTB &= 0b00111111;
 }
